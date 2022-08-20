@@ -12,96 +12,14 @@
 #include "nvs_flash.h"
 #include "esp_task_wdt.h"
 
+// 任务句柄
+TaskHandle_t wifiScanTaskHandler;
+TaskHandle_t wifiTryConnectTaskHandler;
+// 队列句柄
 QueueHandle_t apInfoQueueHandler;
+// 定时器句柄
 TimerHandle_t wdogTimerHandler;
-static const char *TAG = "scan";
-
-static void print_auth_mode(int authmode)
-{
-    switch (authmode)
-    {
-    case WIFI_AUTH_OPEN:
-        ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_OPEN");
-        break;
-    case WIFI_AUTH_WEP:
-        ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WEP");
-        break;
-    case WIFI_AUTH_WPA_PSK:
-        ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA_PSK");
-        break;
-    case WIFI_AUTH_WPA2_PSK:
-        ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA2_PSK");
-        break;
-    case WIFI_AUTH_WPA_WPA2_PSK:
-        ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA_WPA2_PSK");
-        break;
-    case WIFI_AUTH_WPA2_ENTERPRISE:
-        ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA2_ENTERPRISE");
-        break;
-    case WIFI_AUTH_WPA3_PSK:
-        ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA3_PSK");
-        break;
-    case WIFI_AUTH_WPA2_WPA3_PSK:
-        ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_WPA2_WPA3_PSK");
-        break;
-    default:
-        ESP_LOGI(TAG, "Authmode \tWIFI_AUTH_UNKNOWN");
-        break;
-    }
-}
-
-static void print_cipher_type(int pairwise_cipher, int group_cipher)
-{
-    switch (pairwise_cipher)
-    {
-    case WIFI_CIPHER_TYPE_NONE:
-        ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_NONE");
-        break;
-    case WIFI_CIPHER_TYPE_WEP40:
-        ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_WEP40");
-        break;
-    case WIFI_CIPHER_TYPE_WEP104:
-        ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_WEP104");
-        break;
-    case WIFI_CIPHER_TYPE_TKIP:
-        ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_TKIP");
-        break;
-    case WIFI_CIPHER_TYPE_CCMP:
-        ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_CCMP");
-        break;
-    case WIFI_CIPHER_TYPE_TKIP_CCMP:
-        ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_TKIP_CCMP");
-        break;
-    default:
-        ESP_LOGI(TAG, "Pairwise Cipher \tWIFI_CIPHER_TYPE_UNKNOWN");
-        break;
-    }
-
-    switch (group_cipher)
-    {
-    case WIFI_CIPHER_TYPE_NONE:
-        ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_NONE");
-        break;
-    case WIFI_CIPHER_TYPE_WEP40:
-        ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_WEP40");
-        break;
-    case WIFI_CIPHER_TYPE_WEP104:
-        ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_WEP104");
-        break;
-    case WIFI_CIPHER_TYPE_TKIP:
-        ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_TKIP");
-        break;
-    case WIFI_CIPHER_TYPE_CCMP:
-        ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_CCMP");
-        break;
-    case WIFI_CIPHER_TYPE_TKIP_CCMP:
-        ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_TKIP_CCMP");
-        break;
-    default:
-        ESP_LOGI(TAG, "Group Cipher \tWIFI_CIPHER_TYPE_UNKNOWN");
-        break;
-    }
-}
+static const char *TAG = "MAIN";
 
 /* Initialize Wi-Fi as sta and set scan method */
 static void wifi_scan_init(void)
@@ -120,28 +38,28 @@ static void wifi_scan_init(void)
 static void wifi_scan(void)
 {
     uint16_t number = DEFAULT_SCAN_LIST_SIZE;
-    wifi_ap_record_t ap_info[DEFAULT_SCAN_LIST_SIZE]; // AP信息记录的结构体
-    uint16_t ap_count = 0;
-    memset(ap_info, 0, sizeof(ap_info));
+    wifi_ap_record_t apInfo[DEFAULT_SCAN_LIST_SIZE]; // AP信息记录的结构体
+    uint16_t apCount = 0, noPswApCount = 0;
+    memset(apInfo, 0, sizeof(apInfo));
     ESP_ERROR_CHECK(esp_wifi_start());
     esp_wifi_scan_start(NULL, true);
-    ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&number, ap_info));
-    ESP_ERROR_CHECK(esp_wifi_scan_get_ap_num(&ap_count));
-    ESP_LOGI(TAG, "Total APs scanned = %u", ap_count);
-    for (int i = 0; (i < DEFAULT_SCAN_LIST_SIZE) && (i < ap_count); i++)
+    ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&number, apInfo));
+    ESP_ERROR_CHECK(esp_wifi_scan_get_ap_num(&apCount));
+    ESP_LOGI(TAG, "Total APs scanned = %u", apCount);
+    for (int i = 0; (i < DEFAULT_SCAN_LIST_SIZE) && (i < apCount); i++)
     {
-        if (ap_info[i].authmode == WIFI_AUTH_OPEN)
+        if (apInfo[i].authmode == WIFI_AUTH_OPEN)
         {
             ESP_LOGI(TAG, "Find The AP no psw ");
-            // ESP_LOGI(TAG, "SSID \t\t%s", ap_info[i].ssid);
-            // ESP_LOGI(TAG, "RSSI \t\t%d", ap_info[i].rssi);
-            // print_auth_mode(ap_info[i].authmode);
-            // if (ap_info[i].authmode != WIFI_AUTH_WEP)
-            // {
-            //     print_cipher_type(ap_info[i].pairwise_cipher, ap_info[i].group_cipher);
-            // }
-            // ESP_LOGI(TAG, "Channel \t\t%d\n", ap_info[i].primary);
-            xQueueSend(apInfoQueueHandler, &ap_info[i], portMAX_DELAY);
+            ESP_LOGI(TAG, "SSID \t\t%s", apInfo[i].ssid);
+            ESP_LOGI(TAG, "RSSI \t\t%d", apInfo[i].rssi);
+            ESP_LOGI(TAG, "Channel \t\t%d\n", apInfo[i].primary);
+            xQueueSend(apInfoQueueHandler, &apInfo[i], portMAX_DELAY);
+            noPswApCount++;
+        }
+        if (noPswApCount)
+        {
+            vTaskSuspend(wifiScanTaskHandler); //存在无密码AP，挂起扫描任务
         }
     }
 }
@@ -161,20 +79,19 @@ void vTaskWifiScan(void *pvParameters)
 
 void vTaskTryConnect(void *pvParameters)
 {
-    wifi_ap_record_t ap_info;
+    wifi_ap_record_t apInfo;
     while (1)
     {
-        if (xQueueReceive(apInfoQueueHandler, &ap_info, portMAX_DELAY)) //阻塞等待
+        if (xQueueReceive(apInfoQueueHandler, &apInfo, portMAX_DELAY)) //阻塞等待
         {
-            ESP_LOGI(TAG, "recive ap no psw %s", ap_info.ssid);
+            ESP_LOGI(TAG, "recive ap no psw %s", apInfo.ssid);
         }
     }
 }
 
-void wdogTimerCallback(TimerHandle_t xTimer)
+void wdogTimerCallback(TimerHandle_t xTimer) //定时喂狗任务
 {
     esp_task_wdt_reset();
-    ESP_LOGI(TAG, "esp_task_wdt_reset");
 }
 
 void app_main(void)
@@ -188,15 +105,12 @@ void app_main(void)
     ESP_ERROR_CHECK(ret);
     wifi_scan_init();
     wdogTimerHandler = xTimerCreate("wdogTimer",
-                                    (TickType_t)pdMS_TO_TICKS(100), // 200ms
+                                    (TickType_t)pdMS_TO_TICKS(300), // 200ms
                                     (UBaseType_t)pdTRUE,
                                     (void *)1,
                                     (TimerCallbackFunction_t)wdogTimerCallback);
     xTimerStart(wdogTimerHandler, 0);
-    xTaskCreate(vTaskWifiScan, "wifi scan", 8192, NULL, 1, NULL);
-    xTaskCreate(vTaskTryConnect, "try connect", 8192, NULL, 2, NULL);
+    xTaskCreate(vTaskWifiScan, "wifi scan", 8192, NULL, 1, wifiScanTaskHandler);
+    xTaskCreate(vTaskTryConnect, "try connect", 8192, NULL, 2, wifiTryConnectTaskHandler);
     vTaskStartScheduler();
-    while (1)
-    {
-    }
 }

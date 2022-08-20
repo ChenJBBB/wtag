@@ -1,7 +1,7 @@
 {
     "cmake.configureOnOpen": false,
     "idf.flashType": "UART",
-    "idf.portWin": "COM3",
+    "idf.portWin": "COM4",
     "idf.adapterTargetName": "esp32",
     "idf.flashBaudRate": "1000000",
     "files.associations": {

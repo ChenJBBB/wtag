@@ -4,7 +4,7 @@
             "name": "ESP32",
             "includePath": [
                 "${workspaceFolder}/**",
-                "C:\\Espressif\\frameworks\\esp-idf-v4.4.1\\components\\**",
+                "C:\\ESPIDF\\esp-idf\\components\\**",
                 "C:/Espressif/tools/xtensa-esp32-elf/esp-2021r2-patch3-8.4.0/xtensa-esp32-elf/**"
             ],
             "defines": [

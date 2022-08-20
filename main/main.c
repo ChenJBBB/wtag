@@ -5,13 +5,15 @@
 #include <FreeRTOSConfig.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
+#include "config.h"
 #include "esp_wifi.h"
 #include "esp_log.h"
 #include "esp_event.h"
 #include "nvs_flash.h"
+#include "esp_task_wdt.h"
 
-#define DEFAULT_SCAN_LIST_SIZE 6
-
+QueueHandle_t apInfoQueueHandler;
+TimerHandle_t wdogTimerHandler;
 static const char *TAG = "scan";
 
 static void print_auth_mode(int authmode)
@@ -121,7 +123,6 @@ static void wifi_scan(void)
     wifi_ap_record_t ap_info[DEFAULT_SCAN_LIST_SIZE]; // AP信息记录的结构体
     uint16_t ap_count = 0;
     memset(ap_info, 0, sizeof(ap_info));
-
     ESP_ERROR_CHECK(esp_wifi_start());
     esp_wifi_scan_start(NULL, true);
     ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&number, ap_info));
@@ -132,30 +133,52 @@ static void wifi_scan(void)
         if (ap_info[i].authmode == WIFI_AUTH_OPEN)
         {
             ESP_LOGI(TAG, "Find The AP no psw ");
-            ESP_LOGI(TAG, "SSID \t\t%s", ap_info[i].ssid);
-            ESP_LOGI(TAG, "RSSI \t\t%d", ap_info[i].rssi);
-            print_auth_mode(ap_info[i].authmode);
-            if (ap_info[i].authmode != WIFI_AUTH_WEP)
-            {
-                print_cipher_type(ap_info[i].pairwise_cipher, ap_info[i].group_cipher);
-            }
-            ESP_LOGI(TAG, "Channel \t\t%d\n", ap_info[i].primary);
+            // ESP_LOGI(TAG, "SSID \t\t%s", ap_info[i].ssid);
+            // ESP_LOGI(TAG, "RSSI \t\t%d", ap_info[i].rssi);
+            // print_auth_mode(ap_info[i].authmode);
+            // if (ap_info[i].authmode != WIFI_AUTH_WEP)
+            // {
+            //     print_cipher_type(ap_info[i].pairwise_cipher, ap_info[i].group_cipher);
+            // }
+            // ESP_LOGI(TAG, "Channel \t\t%d\n", ap_info[i].primary);
+            xQueueSend(apInfoQueueHandler, &ap_info[i], portMAX_DELAY);
         }
     }
 }
 
 void vTaskWifiScan(void *pvParameters)
 {
+    apInfoQueueHandler = xQueueCreate(10, sizeof(wifi_ap_record_t));
+    if (apInfoQueueHandler == NULL)
+    {
+        vTaskDelete(NULL);
+    }
     while (1)
     {
-        ESP_LOGI(TAG, "vTaskWifiScan is runing");
         wifi_scan();
     }
 }
 
+void vTaskTryConnect(void *pvParameters)
+{
+    wifi_ap_record_t ap_info;
+    while (1)
+    {
+        if (xQueueReceive(apInfoQueueHandler, &ap_info, portMAX_DELAY)) //阻塞等待
+        {
+            ESP_LOGI(TAG, "recive ap no psw %s", ap_info.ssid);
+        }
+    }
+}
+
+void wdogTimerCallback(TimerHandle_t xTimer)
+{
+    esp_task_wdt_reset();
+    ESP_LOGI(TAG, "esp_task_wdt_reset");
+}
+
 void app_main(void)
 {
-    // Initialize NVS
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
     {
@@ -163,12 +186,17 @@ void app_main(void)
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
-    TaskHandle_t xHandle = NULL;
     wifi_scan_init();
-    xTaskCreate(vTaskWifiScan, "wifi scan", 2048, NULL, 1, &xHandle);
+    wdogTimerHandler = xTimerCreate("wdogTimer",
+                                    (TickType_t)pdMS_TO_TICKS(100), // 200ms
+                                    (UBaseType_t)pdTRUE,
+                                    (void *)1,
+                                    (TimerCallbackFunction_t)wdogTimerCallback);
+    xTimerStart(wdogTimerHandler, 0);
+    xTaskCreate(vTaskWifiScan, "wifi scan", 8192, NULL, 1, NULL);
+    xTaskCreate(vTaskTryConnect, "try connect", 8192, NULL, 2, NULL);
     vTaskStartScheduler();
-    // while (1)
-    // {
-    //     vTaskDelay(1000);
-    // }
+    while (1)
+    {
+    }
 }

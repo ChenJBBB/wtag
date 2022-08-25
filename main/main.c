@@ -87,6 +87,7 @@ void vTaskTryConnect(void *pvParameters)
                 continue;
             }
         }
+        // 无密码的热点尝试完了，再次扫描
     }
 }
 

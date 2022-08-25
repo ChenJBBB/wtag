@@ -14,12 +14,18 @@
 #include "tryConnect.h"
 
 // 任务句柄
-TaskHandle_t wifiScanTaskHandler;
-TaskHandle_t wifiTryConnectTaskHandler;
+TaskHandle_t wifiScanTaskHandler = NULL;
+;
+TaskHandle_t wifiTryConnectTaskHandler = NULL;
+;
 // 队列句柄
-QueueHandle_t apInfoQueueHandler;
+QueueHandle_t apInfoQueueHandler = NULL;
+;
 // 定时器句柄
-TimerHandle_t wdogTimerHandler;
+TimerHandle_t wdogTimerHandler = NULL;
+;
+// 二值信号量
+SemaphoreHandle_t scanTask2TryTaskSephHandler = NULL;
 static const char *TAG = "MAIN";
 
 static void wifi_scan(void)
@@ -43,13 +49,13 @@ static void wifi_scan(void)
             ESP_LOGI(TAG, "RSSI \t\t%d", apInfo[i].rssi);
             ESP_LOGI(TAG, "Channel \t\t%d\n", apInfo[i].primary);
             xQueueSend(apInfoQueueHandler, &apInfo[i], portMAX_DELAY);
-            noPswApCount++;
         }
         if (noPswApCount)
         {
             ESP_ERROR_CHECK(esp_wifi_scan_stop());
             ESP_ERROR_CHECK(esp_wifi_stop());
-            vTaskSuspend(wifiScanTaskHandler); //存在无密码AP，挂起扫描任务
+            xSemaphoreGive(scanTask2TryTaskSephHandler); // 释放二值信号量
+            vTaskSuspend(wifiScanTaskHandler);           //存在无密码AP，挂起扫描任务
         }
     }
 }
@@ -72,15 +78,13 @@ void vTaskTryConnect(void *pvParameters)
     wifi_ap_record_t apInfo;
     while (1)
     {
-        if (xQueueReceive(apInfoQueueHandler, &apInfo, portMAX_DELAY)) //阻塞等待
+        xSemaphoreTake(scanTask2TryTaskSephHandler, portMAX_DELAY);       // 等待二值信号量
+        while (xQueueReceive(apInfoQueueHandler, &apInfo, portMAX_DELAY)) //阻塞等待
         {
             ESP_LOGI(TAG, "recive ap no psw %s", apInfo.ssid);
-            //vTaskDelay(2000);
             if (!tryConnect(apInfo)) //连接失败
             {
-                // ESP_ERROR_CHECK(esp_wifi_stop());
-                // vTaskResume(wifiScanTaskHandler);
-                // vTaskSuspend(wifiTryConnectTaskHandler);
+                continue;
             }
         }
     }
@@ -113,6 +117,12 @@ void app_main(void)
                                     (void *)1,
                                     (TimerCallbackFunction_t)wdogTimerCallback);
     xTimerStart(wdogTimerHandler, 0);
+    scanTask2TryTaskSephHandler = xSemaphoreCreateBinary(); //二值信号量创建
+    if (scanTask2TryTaskSephHandler == NULL)
+    {
+        ESP_LOGE(TAG, "scanTask2TryTaskSephHandler Creat falid");
+    }
+
     xTaskCreate(vTaskWifiScan, "wifi scan", 8192, NULL, 1, wifiScanTaskHandler);
     xTaskCreate(vTaskTryConnect, "try connect", 8192, NULL, 2, wifiTryConnectTaskHandler);
     vTaskStartScheduler();

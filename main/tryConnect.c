@@ -1,7 +1,7 @@
 #include <tryConnect.h>
 
 static const char *TAG = "TryCnet";
-static int s_retry_num = 0;
+static int wifiConRetryNum = 0;
 /* FreeRTOS event group to signal when we are connected*/
 static EventGroupHandle_t s_wifi_event_group;
 
@@ -16,10 +16,10 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
     ESP_LOGI(TAG, "event_handler event_base = %s event_id = %d", event_base, event_id);
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
     {
-        if (s_retry_num < WiFi_CONNECT_RETRY_SINGLE_TIMES)
+        if (wifiConRetryNum < WiFi_CONNECT_RETRY_SINGLE_TIMES)
         {
             esp_wifi_connect();
-            s_retry_num++;
+            wifiConRetryNum++;
             ESP_LOGI(TAG, "retry to connect to the AP");
         }
         else
@@ -32,7 +32,6 @@ static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_
     {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         ESP_LOGI(TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
-        s_retry_num = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
     }
 }
@@ -83,16 +82,19 @@ uint8_t tryConnect(wifi_ap_record_t apInfo)
         if (bits & WIFI_CONNECTED_BIT)
         {
             ESP_LOGI(TAG, "connected to ap SSID:%s", apInfo.ssid);
+            wifiConRetryNum = 0;
             return 1;
         }
         else if (bits & WIFI_FAIL_BIT)
         {
             ESP_LOGI(TAG, "Failed to connect to SSID:%s", apInfo.ssid);
+            wifiConRetryNum = 0;
             return 0;
         }
         else
         {
             ESP_LOGE(TAG, "UNEXPECTED EVENT");
+            wifiConRetryNum = 0;            
             return 0;
         }
     }

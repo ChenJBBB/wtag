@@ -129,7 +129,11 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
     wdogTimerHandler = xTimerCreate("wdogTimer",
+<<<<<<< HEAD
                                     (TickType_t)pdMS_TO_TICKS(200), // 200ms
+=======
+                                    (TickType_t)pdMS_TO_TICKS(300), // 300ms
+>>>>>>> 9908d9898368295af3aa8cef6e1f72611ad6ee9a
                                     (UBaseType_t)pdTRUE,
                                     (void *)1,
                                     (TimerCallbackFunction_t)wdogTimerCallback);

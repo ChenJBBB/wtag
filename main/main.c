@@ -15,17 +15,17 @@
 
 // 任务句柄
 TaskHandle_t wifiScanTaskHandler = NULL;
-;
+
 TaskHandle_t wifiTryConnectTaskHandler = NULL;
-;
+
 // 队列句柄
 QueueHandle_t apInfoQueueHandler = NULL;
-;
+
 // 定时器句柄
 TimerHandle_t wdogTimerHandler = NULL;
-;
+
 // 二值信号量
-SemaphoreHandle_t scanTask2TryTaskSephHandler = NULL;
+SemaphoreHandle_t apNoPswSephHandler = NULL;
 static const char *TAG = "MAIN";
 
 static void wifi_scan(void)
@@ -49,14 +49,19 @@ static void wifi_scan(void)
             ESP_LOGI(TAG, "RSSI \t\t%d", apInfo[i].rssi);
             ESP_LOGI(TAG, "Channel \t\t%d\n", apInfo[i].primary);
             xQueueSend(apInfoQueueHandler, &apInfo[i], portMAX_DELAY);
+            noPswApCount++;
         }
-        if (noPswApCount)
+    }
+    if (noPswApCount)
+    {
+        ESP_ERROR_CHECK(esp_wifi_scan_stop());
+        ESP_ERROR_CHECK(esp_wifi_stop());
+        for (size_t i = 0; i < noPswApCount; i++)
         {
-            ESP_ERROR_CHECK(esp_wifi_scan_stop());
-            ESP_ERROR_CHECK(esp_wifi_stop());
-            xSemaphoreGive(scanTask2TryTaskSephHandler); // 释放二值信号量
-            vTaskSuspend(wifiScanTaskHandler);           //存在无密码AP，挂起扫描任务
+            xSemaphoreGive(apNoPswSephHandler);
         }
+        noPswApCount = 0;
+        vTaskSuspend(wifiScanTaskHandler); //存在无密码AP，挂起扫描任务
     }
 }
 
@@ -78,16 +83,27 @@ void vTaskTryConnect(void *pvParameters)
     wifi_ap_record_t apInfo;
     while (1)
     {
-        xSemaphoreTake(scanTask2TryTaskSephHandler, portMAX_DELAY);       // 等待二值信号量
-        while (xQueueReceive(apInfoQueueHandler, &apInfo, portMAX_DELAY)) //阻塞等待
+        if (xSemaphoreTake(apNoPswSephHandler, (200 / portTICK_PERIOD_MS)))
         {
+            xQueueReceive(apInfoQueueHandler, &apInfo, (200 / portTICK_PERIOD_MS));
             ESP_LOGI(TAG, "recive ap no psw %s", apInfo.ssid);
             if (!tryConnect(apInfo)) //连接失败
             {
-                continue;
+                ESP_LOGI(TAG, "Connect  %s failed try next", apInfo.ssid);
+            }
+            else
+            {
+                ESP_LOGI(TAG, "AP Connect start judge whether to surf the Internet");
             }
         }
-        // 无密码的热点尝试完了，再次扫描
+        else
+        {
+            if (eTaskGetState(wifiScanTaskHandler) == eSuspended)
+            {
+                vTaskResume(wifiScanTaskHandler);
+                ESP_LOGI(TAG, "vTaskResume (wifiScanTaskHandler);");
+            }
+        }
     }
 }
 
@@ -113,17 +129,16 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
     wdogTimerHandler = xTimerCreate("wdogTimer",
-                                    (TickType_t)pdMS_TO_TICKS(300), // 200ms
+                                    (TickType_t)pdMS_TO_TICKS(200), // 200ms
                                     (UBaseType_t)pdTRUE,
                                     (void *)1,
                                     (TimerCallbackFunction_t)wdogTimerCallback);
     xTimerStart(wdogTimerHandler, 0);
-    scanTask2TryTaskSephHandler = xSemaphoreCreateBinary(); //二值信号量创建
-    if (scanTask2TryTaskSephHandler == NULL)
+    apNoPswSephHandler = xSemaphoreCreateCounting(DEFAULT_SCAN_LIST_SIZE, 0);
+    if (apNoPswSephHandler == NULL)
     {
-        ESP_LOGE(TAG, "scanTask2TryTaskSephHandler Creat falid");
+        ESP_LOGE(TAG, "apNoPswSephHandler Creat falid");
     }
-
     xTaskCreate(vTaskWifiScan, "wifi scan", 8192, NULL, 1, wifiScanTaskHandler);
     xTaskCreate(vTaskTryConnect, "try connect", 8192, NULL, 2, wifiTryConnectTaskHandler);
     vTaskStartScheduler();

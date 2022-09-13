@@ -1,6 +1,3 @@
-/*
-    This example shows how to scan for available set of APs.
-*/
 #include <string.h>
 #include <FreeRTOSConfig.h>
 #include "freertos/FreeRTOS.h"
@@ -61,7 +58,6 @@ static void wifi_scan(void)
             xSemaphoreGive(apNoPswSephHandler);
         }
         noPswApCount = 0;
-        vTaskSuspend(wifiScanTaskHandler); //存在无密码AP，挂起扫描任务
     }
 }
 
@@ -86,6 +82,7 @@ void vTaskTryConnect(void *pvParameters)
         if (xSemaphoreTake(apNoPswSephHandler, (200 / portTICK_PERIOD_MS)))
         {
             xQueueReceive(apInfoQueueHandler, &apInfo, (200 / portTICK_PERIOD_MS));
+            vTaskSuspend(wifiScanTaskHandler); //存在无密码AP，挂起扫描任务
             ESP_LOGI(TAG, "recive ap no psw %s", apInfo.ssid);
             if (!tryConnect(apInfo)) //连接失败
             {
@@ -94,14 +91,19 @@ void vTaskTryConnect(void *pvParameters)
             else
             {
                 ESP_LOGI(TAG, "AP Connect start judge whether to surf the Internet");
+                while (1)
+                {
+                    esp_task_wdt_reset();
+                }
             }
         }
         else
         {
-            if (eTaskGetState(wifiScanTaskHandler) == eSuspended)
+            vTaskDelay(200 / portTICK_PERIOD_MS);
+            wifiScanTaskHandler = xTaskGetHandle("wifi scan");
+            if ((int)eTaskGetState(wifiScanTaskHandler) == (int)eSuspended)
             {
                 vTaskResume(wifiScanTaskHandler);
-                ESP_LOGI(TAG, "vTaskResume (wifiScanTaskHandler);");
             }
         }
     }
@@ -129,11 +131,7 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
     wdogTimerHandler = xTimerCreate("wdogTimer",
-<<<<<<< HEAD
                                     (TickType_t)pdMS_TO_TICKS(200), // 200ms
-=======
-                                    (TickType_t)pdMS_TO_TICKS(300), // 300ms
->>>>>>> 9908d9898368295af3aa8cef6e1f72611ad6ee9a
                                     (UBaseType_t)pdTRUE,
                                     (void *)1,
                                     (TimerCallbackFunction_t)wdogTimerCallback);

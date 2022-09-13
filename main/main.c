@@ -11,18 +11,18 @@
 #include "tryConnect.h"
 
 // 任务句柄
-TaskHandle_t wifiScanTaskHandler = NULL;
+TaskHandle_t wifiScanTaskHandler;
 
-TaskHandle_t wifiTryConnectTaskHandler = NULL;
+TaskHandle_t wifiTryConnectTaskHandler;
 
 // 队列句柄
-QueueHandle_t apInfoQueueHandler = NULL;
+QueueHandle_t apInfoQueueHandler;
 
 // 定时器句柄
-TimerHandle_t wdogTimerHandler = NULL;
+TimerHandle_t wdogTimerHandler;
 
 // 二值信号量
-SemaphoreHandle_t apNoPswSephHandler = NULL;
+SemaphoreHandle_t apNoPswSephHandler;
 static const char *TAG = "MAIN";
 
 static void wifi_scan(void)
@@ -93,7 +93,7 @@ void vTaskTryConnect(void *pvParameters)
                 ESP_LOGI(TAG, "AP Connect start judge whether to surf the Internet");
                 while (1)
                 {
-                    esp_task_wdt_reset();
+                    vTaskDelay(10 / portTICK_PERIOD_MS);
                 }
             }
         }
@@ -109,10 +109,10 @@ void vTaskTryConnect(void *pvParameters)
     }
 }
 
-void wdogTimerCallback(TimerHandle_t xTimer) //定时喂狗任务
-{
-    esp_task_wdt_reset();
-}
+// void wdogTimerCallback(TimerHandle_t xTimer) //定时喂狗任务
+// {
+//     esp_task_wdt_reset();
+// }
 
 void app_main(void)
 {
@@ -130,18 +130,20 @@ void app_main(void)
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-    wdogTimerHandler = xTimerCreate("wdogTimer",
-                                    (TickType_t)pdMS_TO_TICKS(200), // 200ms
-                                    (UBaseType_t)pdTRUE,
-                                    (void *)1,
-                                    (TimerCallbackFunction_t)wdogTimerCallback);
-    xTimerStart(wdogTimerHandler, 0);
+    // wdogTimerHandler = xTimerCreate("wdogTimer",
+    //                                 (TickType_t)pdMS_TO_TICKS(200), // 200ms
+    //                                 (UBaseType_t)pdTRUE,
+    //                                 (void *)1,
+    //                                 (TimerCallbackFunction_t)wdogTimerCallback);
+    // xTimerStart(wdogTimerHandler, 0);
     apNoPswSephHandler = xSemaphoreCreateCounting(DEFAULT_SCAN_LIST_SIZE, 0);
     if (apNoPswSephHandler == NULL)
     {
         ESP_LOGE(TAG, "apNoPswSephHandler Creat falid");
     }
     xTaskCreate(vTaskWifiScan, "wifi scan", 8192, NULL, 1, wifiScanTaskHandler);
+    wifiScanTaskHandler = xTaskGetHandle("wifi scan");
     xTaskCreate(vTaskTryConnect, "try connect", 8192, NULL, 2, wifiTryConnectTaskHandler);
+    wifiTryConnectTaskHandler = xTaskGetHandle("try connect");
     vTaskStartScheduler();
 }

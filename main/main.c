@@ -1,6 +1,3 @@
-/*
-    This example shows how to scan for available set of APs.
-*/
 #include <string.h>
 #include <FreeRTOSConfig.h>
 #include "freertos/FreeRTOS.h"
@@ -61,7 +58,7 @@ static void wifi_scan(void)
             xSemaphoreGive(apNoPswSephHandler);
         }
         noPswApCount = 0;
-        vTaskSuspend(wifiScanTaskHandler); //存在无密码AP，挂起扫描任务
+        vTaskSuspend(wifiScanTaskHandler); // 存在无密码AP，挂起扫描任务
     }
 }
 
@@ -87,7 +84,7 @@ void vTaskTryConnect(void *pvParameters)
         {
             xQueueReceive(apInfoQueueHandler, &apInfo, (200 / portTICK_PERIOD_MS));
             ESP_LOGI(TAG, "recive ap no psw %s", apInfo.ssid);
-            if (!tryConnect(apInfo)) //连接失败
+            if (!tryConnect(apInfo)) // 连接失败
             {
                 ESP_LOGI(TAG, "Connect  %s failed try next", apInfo.ssid);
             }
@@ -107,7 +104,7 @@ void vTaskTryConnect(void *pvParameters)
     }
 }
 
-void wdogTimerCallback(TimerHandle_t xTimer) //定时喂狗任务
+void wdogTimerCallback(TimerHandle_t xTimer) // 定时喂狗任务
 {
     esp_task_wdt_reset();
 }
@@ -123,17 +120,12 @@ void app_main(void)
     ESP_ERROR_CHECK(ret);
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta(); //官方API 初始化为STA模式
+    esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta(); // 官方API 初始化为STA模式
     assert(sta_netif);
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-
     wdogTimerHandler = xTimerCreate("wdogTimer",
-<<<<<<< HEAD
                                     (TickType_t)pdMS_TO_TICKS(200), // 200ms
-=======
-                                    (TickType_t)pdMS_TO_TICKS(300), // 300ms
->>>>>>> 9908d9898368295af3aa8cef6e1f72611ad6ee9a
                                     (UBaseType_t)pdTRUE,
                                     (void *)1,
                                     (TimerCallbackFunction_t)wdogTimerCallback);

@@ -13,7 +13,7 @@ static EventGroupHandle_t s_wifi_event_group;
 
 static void event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
-    ESP_LOGI(TAG, "event_handler event_base = %s event_id = %d", event_base, event_id);
+    // ESP_LOGI(TAG, "event_handler event_base = %s event_id = %d", event_base, event_id);
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
     {
         if (wifiConRetryNum < WiFi_CONNECT_RETRY_SINGLE_TIMES)

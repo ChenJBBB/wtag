@@ -12,6 +12,6 @@
 #include "nvs_flash.h"
 #include "sdkconfig.h"
 
-uint8_t tryConnect(wifi_ap_record_t apInfo);
+esp_err_t tryConnect(wifi_ap_record_t apInfo);
 
 #endif //_TRYCONNECT_H_

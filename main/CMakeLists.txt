@@ -1,2 +1,2 @@
-idf_component_register(SRCS "tryConnect.c" "main.c"
+idf_component_register(SRCS "main.c" "tryConnect.c"
                     INCLUDE_DIRS ".")
